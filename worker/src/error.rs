@@ -1,4 +1,4 @@
-use wasm_bindgen::{JsCast, JsValue};
+use wasm_bindgen::JsValue;
 
 /// All possible Error variants that might be encountered while working with a Worker.
 #[derive(Debug)]
@@ -7,13 +7,14 @@ pub enum Error {
     BadEncoding,
     BodyUsed,
     Json((String, u16)),
-    JsError(String),
+    JsError(JsValue),
     Internal(JsValue),
     BindingError(String),
     RouteInsertError(matchit::InsertError),
     RouteNoDataError,
     RustError(String),
     SerdeJsonError(serde_json::Error),
+    SerdeWasmBindgenError(serde_wasm_bindgen::Error),
 }
 
 impl From<worker_kv::KvError> for Error {
@@ -35,14 +36,14 @@ impl std::fmt::Display for Error {
             Error::BadEncoding => write!(f, "content-type mismatch"),
             Error::BodyUsed => write!(f, "body has already been read"),
             Error::Json((msg, status)) => write!(f, "{} (status: {})", msg, status),
-            Error::JsError(s) | Error::RustError(s) => {
-                write!(f, "{}", s)
-            }
-            Error::Internal(_) => write!(f, "unrecognized JavaScript object"),
+            Error::JsError(v) => write!(f, "Javascript Error: {:?}", v),
+            Error::RustError(s) => write!(f, "{}", s),
+            Error::Internal(o) => write!(f, "Unrecognized JavaScript object {:?}", o),
             Error::BindingError(name) => write!(f, "no binding found for `{}`", name),
             Error::RouteInsertError(e) => write!(f, "failed to insert route: {}", e),
             Error::RouteNoDataError => write!(f, "route has no corresponding shared data"),
             Error::SerdeJsonError(e) => write!(f, "Serde Error: {}", e),
+            Error::SerdeWasmBindgenError(e) => write!(f, "Serde Error: {}", e),
         }
     }
 }
@@ -51,13 +52,7 @@ impl std::error::Error for Error {}
 
 impl From<JsValue> for Error {
     fn from(v: JsValue) -> Self {
-        match v
-            .as_string()
-            .or_else(|| v.dyn_ref::<js_sys::Error>().map(|e| e.to_string().into()))
-        {
-            Some(s) => Self::JsError(s),
-            None => Self::Internal(v),
-        }
+        Self::JsError(v)
     }
 }
 
@@ -88,5 +83,11 @@ impl From<matchit::InsertError> for Error {
 impl From<serde_json::Error> for Error {
     fn from(e: serde_json::Error) -> Self {
         Error::SerdeJsonError(e)
+    }
+}
+
+impl From<serde_wasm_bindgen::Error> for Error {
+    fn from(e: serde_wasm_bindgen::Error) -> Self {
+        Error::SerdeWasmBindgenError(e)
     }
 }

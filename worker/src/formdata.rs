@@ -151,12 +151,7 @@ impl File {
         JsFuture::from(self.0.array_buffer())
             .await
             .map(|val| js_sys::Uint8Array::new(&val).to_vec())
-            .map_err(|e| {
-                Error::JsError(
-                    e.as_string()
-                        .unwrap_or_else(|| "failed to read array buffer from file".into()),
-                )
-            })
+            .map_err(|e| Error::JsError(e))
     }
 
     /// Get the last_modified metadata property of the file.

@@ -69,12 +69,7 @@ impl Request {
                 req.immutable = false;
                 req
             })
-            .map_err(|e| {
-                Error::JsError(
-                    e.as_string()
-                        .unwrap_or_else(|| "invalid URL or method for Request".to_string()),
-                )
-            })
+            .map_err(|e| Error::JsError(e))
     }
 
     /// Construct a new `Request` with a `RequestInit` configuration.
@@ -85,12 +80,7 @@ impl Request {
                 req.immutable = false;
                 req
             })
-            .map_err(|e| {
-                Error::JsError(
-                    e.as_string()
-                        .unwrap_or_else(|| "invalid URL or options for Request".to_string()),
-                )
-            })
+            .map_err(|e| Error::JsError(e))
     }
 
     /// Access this request's body encoded as JSON.
@@ -99,13 +89,8 @@ impl Request {
             self.body_used = true;
             return JsFuture::from(self.edge_request.json()?)
                 .await
-                .map_err(|e| {
-                    Error::JsError(
-                        e.as_string()
-                            .unwrap_or_else(|| "failed to get JSON for body value".into()),
-                    )
-                })
-                .and_then(|val| val.into_serde().map_err(Error::from));
+                .map_err(|e| Error::JsError(e))
+                .and_then(|val| serde_wasm_bindgen::from_value(val).map_err(Error::from));
         }
 
         Err(Error::BodyUsed)
@@ -118,12 +103,7 @@ impl Request {
             return JsFuture::from(self.edge_request.text()?)
                 .await
                 .map(|val| val.as_string().unwrap())
-                .map_err(|e| {
-                    Error::JsError(
-                        e.as_string()
-                            .unwrap_or_else(|| "failed to get text for body value".into()),
-                    )
-                });
+                .map_err(|e| Error::JsError(e));
         }
 
         Err(Error::BodyUsed)
@@ -136,12 +116,7 @@ impl Request {
             return JsFuture::from(self.edge_request.array_buffer()?)
                 .await
                 .map(|val| js_sys::Uint8Array::new(&val).to_vec())
-                .map_err(|e| {
-                    Error::JsError(
-                        e.as_string()
-                            .unwrap_or_else(|| "failed to read array buffer from request".into()),
-                    )
-                });
+                .map_err(|e| Error::JsError(e));
         }
 
         Err(Error::BodyUsed)
@@ -154,12 +129,7 @@ impl Request {
             return JsFuture::from(self.edge_request.form_data()?)
                 .await
                 .map(|val| val.into())
-                .map_err(|e| {
-                    Error::JsError(
-                        e.as_string()
-                            .unwrap_or_else(|| "failed to get form data from request".into()),
-                    )
-                });
+                .map_err(|e| Error::JsError(e));
         }
 
         Err(Error::BodyUsed)
