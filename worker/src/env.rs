@@ -1,3 +1,4 @@
+use crate::d1::D1Database;
 use crate::error::Error;
 use crate::{durable::ObjectNamespace, DynamicDispatcher, Fetcher, Result};
 
@@ -13,8 +14,8 @@ extern "C" {
 
 impl Env {
     fn get_binding<T: EnvBinding>(&self, name: &str) -> Result<T> {
-        let binding = js_sys::Reflect::get(self, &JsValue::from(name))
-            .map_err(|_| Error::JsError(format!("Env does not contain binding `{}`", name)))?;
+        let binding =
+            js_sys::Reflect::get(self, &JsValue::from(name)).map_err(|err| Error::JsError(err))?;
         if binding.is_undefined() {
             Err(format!("Binding `{}` is undefined.", name).into())
         } else {
@@ -54,6 +55,11 @@ impl Env {
     /// Get a [Service Binding](https://developers.cloudflare.com/workers/runtime-apis/service-bindings/)
     /// for Worker-to-Worker communication.
     pub fn service(&self, binding: &str) -> Result<Fetcher> {
+        self.get_binding(binding)
+    }
+
+    /// Access a D1 Database by the binding name configured in your wrangler.toml file.
+    pub fn d1(&self, binding: &str) -> Result<D1Database> {
         self.get_binding(binding)
     }
 }
