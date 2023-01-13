@@ -51,7 +51,7 @@ impl D1Database {
 }
 
 impl EnvBinding for D1Database {
-    const TYPE_NAME: &'static str = "D1Database";
+    const TYPE_NAME: &'static str = "BetaDatabase";
 }
 
 impl JsCast for D1Database {
