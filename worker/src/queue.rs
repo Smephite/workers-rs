@@ -95,7 +95,9 @@ where
         let id = js_sys::Reflect::get(message, self.id_key)?
             .as_string()
             .ok_or(Error::JsError(
-                "Invalid message batch. Failed to get id from message.".to_string(),
+                "Invalid message batch. Failed to get id from message."
+                    .to_string()
+                    .into(),
             ))?;
         let body = serde_wasm_bindgen::from_value(js_sys::Reflect::get(message, self.body_key)?)?;
 

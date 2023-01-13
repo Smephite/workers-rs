@@ -59,7 +59,7 @@ impl Env {
     pub fn service(&self, binding: &str) -> Result<Fetcher> {
         self.get_binding(binding)
     }
-    
+
     /// Access a D1 Database by the binding name configured in your wrangler.toml file.
     pub fn d1(&self, binding: &str) -> Result<D1Database> {
         self.get_binding(binding)

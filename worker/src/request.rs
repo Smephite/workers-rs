@@ -92,7 +92,8 @@ impl Request {
                 .map_err(|e| {
                     Error::JsError(
                         e.as_string()
-                            .unwrap_or_else(|| "failed to get JSON for body value".into()),
+                            .unwrap_or_else(|| "failed to get JSON for body value".into())
+                            .into(),
                     )
                 })
                 .and_then(|val| serde_wasm_bindgen::from_value(val).map_err(Error::from));

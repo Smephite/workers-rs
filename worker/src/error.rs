@@ -92,9 +92,3 @@ impl From<serde_json::Error> for Error {
         Error::SerdeJsonError(e)
     }
 }
-
-impl From<serde_wasm_bindgen::Error> for Error {
-    fn from(e: serde_wasm_bindgen::Error) -> Self {
-        Error::SerdeWasmBindgenError(e)
-    }
-}
