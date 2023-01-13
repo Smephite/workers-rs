@@ -1,5 +1,8 @@
 use std::{
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
 
@@ -7,10 +10,12 @@ use blake2::{Blake2b512, Digest};
 use futures_util::{future::Either, StreamExt, TryStreamExt};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use worker::*;
 
 mod alarm;
 mod counter;
+mod r2;
 mod test;
 mod utils;
 
@@ -45,12 +50,12 @@ struct FileSize {
     size: u32,
 }
 
-struct SomeSharedData {
+pub struct SomeSharedData {
     regex: regex::Regex,
 }
 
 fn handle_a_request<D>(req: Request, _ctx: RouteContext<D>) -> Result<Response> {
-    Response::ok(&format!(
+    Response::ok(format!(
         "req at: {}, located at: {:?}, within: {}",
         req.path(),
         req.cf().coordinates().unwrap_or_default(),
@@ -59,7 +64,7 @@ fn handle_a_request<D>(req: Request, _ctx: RouteContext<D>) -> Result<Response> 
 }
 
 async fn handle_async_request<D>(req: Request, _ctx: RouteContext<D>) -> Result<Response> {
-    Response::ok(&format!(
+    Response::ok(format!(
         "[async] req at: {}, located at: {:?}, within: {}",
         req.path(),
         req.cf().coordinates().unwrap_or_default(),
@@ -68,6 +73,8 @@ async fn handle_async_request<D>(req: Request, _ctx: RouteContext<D>) -> Result<
 }
 
 static GLOBAL_STATE: AtomicBool = AtomicBool::new(false);
+
+static GLOBAL_QUEUE_STATE: Mutex<Vec<QueueBody>> = Mutex::new(Vec::new());
 
 // We're able to specify a start event that is called when the WASM is initialized before any
 // requests. This is useful if you have some global state or setup code, like a logger. This is
@@ -279,7 +286,7 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
         })
         .post_async("/post-file-size", |mut req, _| async move {
             let bytes = req.bytes().await?;
-            Response::ok(&format!("size = {}", bytes.len()))
+            Response::ok(format!("size = {}", bytes.len()))
         })
         .get("/user/:id/test", |_req, ctx| {
             if let Some(id) = ctx.param("id") {
@@ -657,6 +664,42 @@ pub async fn main(req: Request, env: Env, _ctx: worker::Context) -> Result<Respo
 
             fetcher.fetch(req.url()?.to_string(), Some(init)).await
         })
+        .post_async("/queue/send/:id", |_req, ctx| async move {
+            let id = match ctx.param("id").map(|id|Uuid::try_parse(id).ok()).and_then(|u|u) {
+                Some(id) => id,
+                None =>  {
+                    return Response::error("Failed to parse id, expected a UUID", 400);
+                }
+            };
+            let my_queue = match ctx.env.queue("my_queue") {
+                Ok(queue) => queue,
+                Err(err) => {
+                    return Response::error(format!("Failed to get queue: {err:?}"), 500)
+                }
+            };
+            match my_queue.send(&QueueBody {
+                id,
+                id_string: id.to_string(),
+            }).await {
+                Ok(_) => {
+                    Response::ok("Message sent")
+                }
+                Err(err) => {
+                    Response::error(format!("Failed to send message to queue: {err:?}"), 500)
+                }
+            }
+        }).get_async("/queue", |_req, _ctx| async move {
+            let guard = GLOBAL_QUEUE_STATE.lock().unwrap();
+            let messages: Vec<QueueBody> = guard.clone();
+            Response::from_json(&messages)
+        })
+        .get_async("/r2/list-empty", r2::list_empty)
+        .get_async("/r2/list", r2::list)
+        .get_async("/r2/get-empty", r2::get_empty)
+        .get_async("/r2/get", r2::get)
+        .put_async("/r2/put", r2::put)
+        .put_async("/r2/put-properties", r2::put_properties)
+        .delete_async("/r2/delete", r2::delete)
         .or_else_any_method_async("/*catchall", |_, ctx| async move {
             console_log!(
                 "[or_else_any_method_async] caught: {}",
@@ -686,4 +729,25 @@ async fn respond_async<D>(req: Request, _ctx: RouteContext<D>) -> Result<Respons
         headers.set("x-testing", "123").unwrap();
         resp.with_headers(headers)
     })
+}
+
+#[derive(Serialize, Debug, Clone, Deserialize)]
+pub struct QueueBody {
+    pub id: Uuid,
+    pub id_string: String,
+}
+
+#[event(queue)]
+pub async fn queue(message_batch: MessageBatch<QueueBody>, _env: Env, _ctx: Context) -> Result<()> {
+    let mut guard = GLOBAL_QUEUE_STATE.lock().unwrap();
+    for message in message_batch.messages()? {
+        console_log!(
+            "Received queue message {:?}, with id {} and timestamp: {}",
+            message.body,
+            message.id,
+            message.timestamp.to_string()
+        );
+        guard.push(message.body);
+    }
+    Ok(())
 }

@@ -89,7 +89,12 @@ impl Request {
             self.body_used = true;
             return JsFuture::from(self.edge_request.json()?)
                 .await
-                .map_err(|e| Error::JsError(e))
+                .map_err(|e| {
+                    Error::JsError(
+                        e.as_string()
+                            .unwrap_or_else(|| "failed to get JSON for body value".into()),
+                    )
+                })
                 .and_then(|val| serde_wasm_bindgen::from_value(val).map_err(Error::from));
         }
 
