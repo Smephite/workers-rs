@@ -131,7 +131,6 @@ impl D1PreparedStatement {
     pub async fn all(&self) -> Result<D1Result> {
         let promise = self.0.all();
         let result = JsFuture::from(promise).await;
-        console_log!("{:?}", self.0);
         let jsv = match result {
             Ok(f) => f,
             Err(err) => return Err(Error::JsError(err)),
