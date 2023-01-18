@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use js_sys::Array;
 use js_sys::ArrayBuffer;
+use js_sys::Object;
 use js_sys::Uint8Array;
 use serde::de::Deserialize;
 use wasm_bindgen::{JsCast, JsValue};
@@ -52,6 +53,21 @@ impl D1Database {
 
 impl EnvBinding for D1Database {
     const TYPE_NAME: &'static str = "D1Database";
+    
+    fn get(val: JsValue) -> Result<Self> {
+        let obj = Object::from(val);
+        // Somehow miniflare uses the type name "BetaDatabase"
+        if obj.constructor().name() == Self::TYPE_NAME || obj.constructor().name() == "BetaDatabase" {
+            Ok(obj.unchecked_into())
+        } else {
+            Err(format!(
+                "Binding cannot be cast to the type {} from {}",
+                Self::TYPE_NAME,
+                obj.constructor().name()
+            )
+            .into())
+        }
+    }
 }
 
 impl JsCast for D1Database {
